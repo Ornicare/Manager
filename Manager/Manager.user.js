@@ -13,6 +13,8 @@
 //fonctionnement optimal : demander soit seulement des batiments, soit seulement des ressources. Unmix des deux => pas de priorité pour l'un ou l'autre (les ressources du bat pas prioritaires)
 //use auto refresh every 30min (bug loaded)
 
+//TODO prérecquis pas gérés : pas possible de récup les technos.
+
 //TODO priorité batiments
 //TODO trajets proportionnels au nb de resosurces needed. => mouaif
 
@@ -24,6 +26,13 @@ var activated = getCookie("activated");
 if (activated == null) {
 	activated = false;
 	setActivated();
+}
+
+var coefMax = getCookie("coefMax");
+
+if (coefMax == null) {
+	coefMax = 1;
+	setCookie("coefMax", coefMax);
 }
 
 // ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -67,13 +76,13 @@ if (window.location.href == 'http://navigatorcraft.net/accueil') {
 	workflows.put('Redstone', [ "mine", ":19", 52, 3636 ]);
 
 	workflows.put('Salle des coffres', [ "build", 6 ]);
-	workflows.put('Académie', [ "build",1]);
-	workflows.put('Champs', [ "build",12]);
-	workflows.put('Mine', [ "build",2]);
-	workflows.put('Armurerie', [ "build",3]);
-	workflows.put('Enclos', [ "build",11]);
-	workflows.put('Habitation', [ "build",13]);
-	workflows.put('Comptoir', [ "build",4]);
+	workflows.put('Académie', [ "build", 1 ]);
+	workflows.put('Champs', [ "build", 12 ]);
+	workflows.put('Mine', [ "build", 2 ]);
+	workflows.put('Armurerie', [ "build", 3 ]);
+	workflows.put('Enclos', [ "build", 11 ]);
+	workflows.put('Habitation', [ "build", 13 ]);
+	workflows.put('Comptoir', [ "build", 4 ]);
 
 	// stock capacities
 	var stock = new HashMap();
@@ -140,7 +149,7 @@ if (window.location.href == 'http://navigatorcraft.net/accueil') {
 		return 83.3 * Math.pow(1.20, x);
 	});
 	stock.put('Champs', sDC);
-	
+
 	sDC = new HashMap();
 	sDC.put('Bois', function(x) {
 		return 167 * Math.pow(1.20, x);
@@ -149,7 +158,7 @@ if (window.location.href == 'http://navigatorcraft.net/accueil') {
 		return 83.5 * Math.pow(1.20, x);
 	});
 	stock.put('Mine', sDC);
-	
+
 	sDC = new HashMap();
 	sDC.put('Fer', function(x) {
 		return 35.7 * Math.pow(1.40, x);
@@ -158,7 +167,7 @@ if (window.location.href == 'http://navigatorcraft.net/accueil') {
 		return 50 * Math.pow(1.40, x);
 	});
 	stock.put('Armurerie', sDC);
-	
+
 	sDC = new HashMap();
 	sDC.put('Bois', function(x) {
 		return 118 * Math.pow(1.70, x);
@@ -167,27 +176,27 @@ if (window.location.href == 'http://navigatorcraft.net/accueil') {
 		return 11.8 * Math.pow(1.70, x);
 	});
 	stock.put('Enclos', sDC);
-	
+
 	sDC = new HashMap();
 	sDC.put('Bois', function(x) {
-		return 60 * Math.pow(1.20, x-1);
+		return 60 * Math.pow(1.20, x - 1);
 	});
 	sDC.put('Redstone', function(x) {
-		return 10 * Math.pow(1.20, x-1);
+		return 10 * Math.pow(1.20, x - 1);
 	});
 	stock.put('Comptoir', sDC);
-	
-	//TODO temp => only level 3 present
-	
+
+	// TODO temp => only level 3 present
+
 	sDC = new HashMap();
 	sDC.put('Bois', function(x) {
-		return 1300;
+		return 222 * Math.pow(1.80, x);
 	});
 	sDC.put('Redstone', function(x) {
-		return 250;
+		return 41.7 * Math.pow(1.80, x);
 	});
 	sDC.put('Cuir', function(x) {
-		return 650;
+		return 111 * Math.pow(1.80, x);
 	});
 	stock.put('Habitation', sDC);
 	// buildings
@@ -209,7 +218,14 @@ if (window.location.href == 'http://navigatorcraft.net/accueil') {
 				.getElementsByClassName('overlay_niveau')[0]
 				.getElementsByTagName('p')[0].innerHTML);
 	}
-//	alert(champsLevel);
+	
+	var mineLevel = 0;
+	if (document.getElementById("batiment_2")) {
+		mineLevel = parseInt(document.getElementById("batiment_2")
+				.getElementsByClassName('overlay_niveau')[0]
+				.getElementsByTagName('p')[0].innerHTML);
+	}
+	// alert(champsLevel);
 
 	// stock.put('Bois',[[1,518],[2,725],[3,1015],[4,1421],[5,1990],[6,2786],[7,3900],[8,5460],[9,7645],[10,10702],[11,14983],[12,20977],[13,29367],[14,41114],[15,57560],[16,80584],[17,112818],[18,157945],[19,221123],[20,309573]]);
 	// stock.put('Fer',[[1,140],[2,196],[3,274],[4,384],[5,538],[6,753],[7,1054],[8,1476],[9,2066],[10,2893],[11,4050],[12,5669],[13,7937],[14,11112],[15,15557],[16,21780],[17,30491],[18,42688],[19,59763],[20,83668]]);
@@ -254,40 +270,50 @@ if (window.location.href == 'http://navigatorcraft.net/accueil') {
 	// ////////////////////////////Calcul des
 	// forces////////////////////////////////////////////
 
-	var maison = document.getElementById('batiment_13');
-	// if(maison.outerHTML.contains('endBatiment')
-	var maisonLevel = maison.getElementsByClassName('overlay_niveau')[0]
-			.getElementsByTagName('p')[0].innerHTML;
-
-	function toInt(bool) {
-		return bool ? 1 : 0
-	}
-	;
-	var inConstruct = toInt(document.getElementById('map').innerHTML
-			.indexOf('endBatiment') !== -1);
+	var used;
+	var totalWorkForce;
 	var totalWokersUsed = document.body.innerHTML.split('Rebour').length - 1;
+	var maison = document.getElementById('batiment_13');
+	if (maison) {
+		// if(maison.outerHTML.contains('endBatiment')
+		var maisonLevel = maison.getElementsByClassName('overlay_niveau')[0]
+				.getElementsByTagName('p')[0].innerHTML;
 
-	var inExplo = toInt(document.body.innerHTML
-			.indexOf('Rebour("#timer_explo"') !== -1);
-	var inMinage = toInt(document.body.innerHTML
-			.indexOf('Rebour("#timer_minage"') !== -1);
-	var inApprentissage = toInt(document.body.innerHTML
-			.indexOf('Rebour("#timer_apprentissage"') !== -1);
+		function toInt(bool) {
+			return bool ? 1 : 0
+		}
+		;
+		var inConstruct = toInt(document.getElementById('map').innerHTML
+				.indexOf('endBatiment') !== -1);
 
-	// used : ['Interaction', 'Apprentissage', 'Construction', 'Minage',
-	// 'Exploration']
-	var inInteraction = 0;
+		var inExplo = toInt(document.body.innerHTML
+				.indexOf('Rebour("#timer_explo"') !== -1);
+		var inMinage = toInt(document.body.innerHTML
+				.indexOf('Rebour("#timer_minage"') !== -1);
+		var inApprentissage = toInt(document.body.innerHTML
+				.indexOf('Rebour("#timer_apprentissage"') !== -1);
 
-	// TODO manque l'interaction => palliatif :
-	if ((inExplo + inMinage + inApprentissage + inConstruct) < totalWokersUsed)
-		inInteraction = 1;
-	var used = [ inInteraction, inApprentissage, inConstruct, inMinage, inExplo ];
+		// used : ['Interaction', 'Apprentissage', 'Construction', 'Minage',
+		// 'Exploration']
+		var inInteraction = 0;
 
-	// var totalWorkForce = getCookie('totalWorkForce');
-	var totalWorkForce = parseInt(maisonLevel) + 1;
+		// TODO manque l'interaction => palliatif :
+		if ((inExplo + inMinage + inApprentissage + inConstruct) < totalWokersUsed)
+			inInteraction = 1;
+		used = [ inInteraction, inApprentissage, inConstruct, inMinage, inExplo ];
 
+		// var totalWorkForce = getCookie('totalWorkForce');
+		var totalWorkForce = parseInt(maisonLevel) + 1;
+
+	} else {
+		used = [ 0, 0, 0, 0, 0 ];
+		totalWorkForce = 1;
+
+	}
 	// ////////////////////////////Fin de Calcul des
 	// forces////////////////////////////////////////////
+
+	// ////////////////BAT INDISPONIBLES//////////////////
 
 	// TODO si d'autres bat à ajouter ?
 	if (document.body.innerHTML.indexOf('Rebour("#timer_2"') !== -1)
@@ -295,16 +321,17 @@ if (window.location.href == 'http://navigatorcraft.net/accueil') {
 	if (document.body.innerHTML.indexOf('Rebour("#timer_1"') !== -1)
 		used[1] = "Unavailable";
 
-	// ////////////////BAT INDISPONIBLES//////////////////
-
 	// ////////////////FIN BAT INDISPONIBLES//////////////////
 
 	// Initialize ressources
 	var ressources = new HashMap();
 
-	var chestRoomLevel = parseInt(document.getElementById("batiment_6")
-			.getElementsByClassName('overlay_niveau')[0]
-			.getElementsByTagName('p')[0].innerHTML);
+	var chestRoomLevel = 0;
+
+	if (document.getElementById("batiment_6"))
+		chestRoomLevel = parseInt(document.getElementById("batiment_6")
+				.getElementsByClassName('overlay_niveau')[0]
+				.getElementsByTagName('p')[0].innerHTML);
 
 	// add the switch button
 	addButton();
@@ -320,10 +347,14 @@ if (window.location.href == 'http://navigatorcraft.net/accueil') {
 	var nextPercent = 0.0;
 	var reloadNeeded = false;
 	var ressourceName = 'None';
+	
+	//totalWorkForce = 2;
+	//used = [0,0,0,0,0];
 
 	// used : ['Interaction', 'Apprentissage', 'Construction', 'Minage',
 	// 'Exploration']
 	if (activated) {
+		
 		// test if workflows are respected
 		if (totalWorkForce > totalWokersUsed) {
 
@@ -344,10 +375,18 @@ if (window.location.href == 'http://navigatorcraft.net/accueil') {
 								if (percent > nextPercent
 										&& newtWorkflow[0] != "build") {
 									// alert(workflows.get(key)+' '+used);
-									if ((workflows.get(key)[0] == 'mine' && used[3] == 0)
+									if ((workflows.get(key)[0] == 'mine' && used[3] == 0 && mineLevel>0)
 											|| (workflows.get(key)[0] == 'explore' && used[4] == 0)) {
 										// are some worker available ?
-										
+                                        var nextQnt = parseInt(value);
+                                        
+                                        if(stock.get(key)(chestRoomLevel) < parseInt(value))
+                                        {
+                                           nextQnt = stock.get(key)(chestRoomLevel);
+                                           if(currentWorkflow.get('Salle des coffres') <= chestRoomLevel)
+															currentWorkflow.put('Salle des coffres',chestRoomLevel + 1);
+                                        }
+
 										ressourceName = key;
 
 										newtWorkflow = workflows.get(key); // build
@@ -358,17 +397,19 @@ if (window.location.href == 'http://navigatorcraft.net/accueil') {
 														chestRoomLevel)
 												* stock.get(key)
 														(chestRoomLevel);
-										coefficient = (parseInt(value) - parseInt(ressources
+										coefficient = (nextQnt - parseInt(ressources
 												.get(key)))
 												/ coefficient;
-										// alert(coefficient);
+	
 										coefficient = parseInt(coefficient) + 1;
 										coefficient = coefficient < 1 ? 1
 												: coefficient;
-										coefficient = coefficient > 23 ? 23
+										coefficient = coefficient > coefMax ? coefMax
 												: coefficient;
-										newtWorkflow[1] = coefficient + ''
+			
+										newtWorkflow[1] = (coefficient+1) + ''
 												+ newtWorkflow[1];
+							
 										newtWorkflow[3] = 3600 * coefficient
 												+ newtWorkflow[3];
 
@@ -383,12 +424,17 @@ if (window.location.href == 'http://navigatorcraft.net/accueil') {
 
 							}
 						} else if (batiments.get(key) != null) {
+						
+							
 							// console.debug('----batiment');
 							// batiments
-							var batLevel = parseInt(document.getElementById(
+							var batLevel = 0;
+							if(document.getElementById("batiment_" + batiments.get(key))) batLevel = parseInt(document.getElementById(
 									"batiment_" + batiments.get(key))
 									.getElementsByClassName('overlay_niveau')[0]
 									.getElementsByTagName('p')[0].innerHTML);
+							
+						
 							// console.debug('-----level=' + batLevel);
 							if (batLevel < parseInt(value)) {
 								// console.debug('-----Need to upgrade');
@@ -406,7 +452,6 @@ if (window.location.href == 'http://navigatorcraft.net/accueil') {
 												if (parseInt(ressources
 														.get(key2)) < parseInt(value2(batLevel + 1))) {
 
-                                                    
 													if (currentWorkflow
 															.get(key2) == null
 															|| parseInt(currentWorkflow
@@ -415,17 +460,21 @@ if (window.location.href == 'http://navigatorcraft.net/accueil') {
 														// this
 														// task
 														reloadNeeded = true;
-														//alert( parseInt(currentWorkflow
-														//			.get(key2)) +'   '+ parseInt(value2(batLevel + 1)));
+														// alert(
+														// parseInt(currentWorkflow
+														// .get(key2)) +' '+
+														// parseInt(value2(batLevel
+														// + 1)));
 														// add a new task : grab
-    													// some
-    													// ressources
-    													
-    													currentWorkflow
-    															.put(
-    																	key2,
-    																	parseInt(value2(batLevel + 1) + 2));
-    													//alert(key2+'  '+currentWorkflow.get(key2));
+														// some
+														// ressources
+
+														currentWorkflow
+																.put(
+																		key2,
+																		parseInt(value2(batLevel + 1) + 2));
+														// alert(key2+'
+														// '+currentWorkflow.get(key2));
 													}
 													// console
 													// .debug('------Not enough
@@ -433,7 +482,7 @@ if (window.location.href == 'http://navigatorcraft.net/accueil') {
 													// + key2);
 													// don(t enough ressources
 													ressourcesOk = false;
-													
+
 													// console
 													// .debug('------Task added
 													// '
@@ -443,7 +492,9 @@ if (window.location.href == 'http://navigatorcraft.net/accueil') {
 													// parseInt(value2(batLevel
 													// +
 													// 1) + 2));
-													if (stock.get(key2) < value2(batLevel + 1) + 1) {
+
+													if (stock.get(key2)(batLevel + 1) < value2(batLevel + 1) + 1) {
+													 
 														// console
 														// .debug('-------Chests
 														// too
@@ -452,26 +503,35 @@ if (window.location.href == 'http://navigatorcraft.net/accueil') {
 														// into
 														// chest
 														// => upgrade chestRoom
-														if(currentWorkflow.get('Salle des coffres')!=null && currentWorkflow.get('Salle des coffres')<=chestRoomLevel) currentWorkflow
-																.put(
-																		'Salle des coffres',
-																		chestRoomLevel + 1);
+														if (currentWorkflow
+																.get('Salle des coffres') != null
+																&& currentWorkflow
+																		.get('Salle des coffres') <= chestRoomLevel)
+															currentWorkflow
+																	.put(
+																			'Salle des coffres',
+																			chestRoomLevel + 1);
 														// console
 														// .debug('-------Chests
 														// added : up to lvl '
 														// + chestRoomLevel
 														// + 1);
 													}
-													
+
 													saveCurrentWorkflow();
 													// console.debug('------Saved');
 												}
 											}
 										});
-										//TODO !(used[3]!=0 && workflows.get(key)[0]==2) palliatif : ne pas contruire la mine si utilisée => pb de reload.
+								// TODO !(used[3]!=0 &&
+								// workflows.get(key)[0]==2) palliatif : ne pas
+								// contruire la mine si utilisée => pb de
+								// reload.
+	
 								if (ressourcesOk
-										&& (workflows.get(key)[0] == 'build' && used[2] == 0) && !(used[3]!=0 && workflows.get(key)[0]==2)) {
-										
+										&& (workflows.get(key)[0] == 'build' && used[2] == 0)
+										&& !(used[3] != 0 && workflows.get(key)[0] == 2)) {
+
 									// console.debug('-----Start build ' + key);
 									// launch construction
 									newtWorkflow = workflows.get(key);
@@ -484,52 +544,57 @@ if (window.location.href == 'http://navigatorcraft.net/accueil') {
 
 					});
 		}
-
+		
 		if (newtWorkflow[0] != 'none') {
 			// console.debug('Launch task' + newtWorkflow[1]);
 			// Launch the 'best' task
 			
-			
-			
-			
-			
-			if (newtWorkflow[0] == "mine")
-			{
-			    $.ajax({
-			     url:"http://nicnl.com:8080/PushInfo/Register",
-			     type:"post",
-			     datatype:"html",
-			     data:"id="+newtWorkflow[0]+"&duree="+newtWorkflow[3]+"&profondeur="+newtWorkflow[2]+"&ressource="+ressourceName+"&start="+((new Date()).getTime())+"",
-			     succes:function(msg){}
-			});
-			   process(2, newtWorkflow[1], newtWorkflow[2], newtWorkflow[3]);
+			if (newtWorkflow[0] == "mine") {
+				$.ajax({
+					url : "http://nicnl.com:8080/PushInfo/Register",
+					type : "post",
+					datatype : "html",
+					data : "id=" + newtWorkflow[0] + "&duree="
+							+ newtWorkflow[3] + "&profondeur="
+							+ newtWorkflow[2] + "&ressource=" + ressourceName
+							+ "&start=" + ((new Date()).getTime()) + "",
+					succes : function(msg) {
+					}
+				});
+				process(2, newtWorkflow[1], newtWorkflow[2], newtWorkflow[3]);
 			}
-				
-			if (newtWorkflow[0] == "explore")
-			{
-			$.ajax({
-			     url:"http://nicnl.com:8080/PushInfo/Register",
-			     type:"post",
-			     datatype:"html",
-			     data:"id="+newtWorkflow[0]+"&duree="+newtWorkflow[3]+"&profondeur="+newtWorkflow[2]+"&ressource="+ressourceName+"&start="+((new Date()).getTime())+"",
-			     succes:function(msg){}
-			});
-			   process(7, newtWorkflow[1], newtWorkflow[2], newtWorkflow[3]);
+
+			if (newtWorkflow[0] == "explore") {
+				$.ajax({
+					url : "http://nicnl.com:8080/PushInfo/Register",
+					type : "post",
+					datatype : "html",
+					data : "id=" + newtWorkflow[0] + "&duree="
+							+ newtWorkflow[3] + "&profondeur="
+							+ newtWorkflow[2] + "&ressource=" + ressourceName
+							+ "&start=" + ((new Date()).getTime()) + "",
+					succes : function(msg) {
+					}
+				});
+				process(7, newtWorkflow[1], newtWorkflow[2], newtWorkflow[3]);
 			}
-				
-			if (newtWorkflow[0] == "build")
-			{
-			$.ajax({
-			     url:"http://nicnl.com:8080/PushInfo/Register",
-			     type:"post",
-			     datatype:"html",
-			     data:"id="+newtWorkflow[0]+"&duree=0&profondeur=0&ressource="+ressourceName+"&start="+((new Date()).getTime())+"",
-			     succes:function(msg){}
-			});
-			    upgradeBat(newtWorkflow[1]);
+
+			if (newtWorkflow[0] == "build") {
+				$.ajax({
+					url : "http://nicnl.com:8080/PushInfo/Register",
+					type : "post",
+					datatype : "html",
+					data : "id=" + newtWorkflow[0]
+							+ "&duree=0&profondeur=0&ressource="
+							+ ressourceName + "&start="
+							+ ((new Date()).getTime()) + "",
+					succes : function(msg) {
+					}
+				});
+				upgradeBat(newtWorkflow[1]);
 			}
-			
-				
+
+
 			reloadNeeded = false;
 		} else if (!reloadNeeded && totalWorkForce > totalWokersUsed
 				&& (used[3] == 0 || used[4] == 0)) {
@@ -550,7 +615,7 @@ if (window.location.href == 'http://navigatorcraft.net/accueil') {
 
 							// console.debug('-----percent' + percent);
 							if (percent < nextPercent
-									&& ((workflows.get(key)[0] == 'mine' && used[3] == 0) || (workflows
+									&& ((workflows.get(key)[0] == 'mine' && used[3] == 0 && mineLevel>0) || (workflows
 											.get(key)[0] == 'explore' && used[4] == 0))) // the
 							// less
 							// present
@@ -566,6 +631,8 @@ if (window.location.href == 'http://navigatorcraft.net/accueil') {
 						}
 
 					});
+			
+			
 			if (nextKey != 'none') {
 				currentWorkflow.put(nextKey,
 						parseInt(ressources.get(nextKey)) + 10);
@@ -633,12 +700,11 @@ if (window.location.href == 'http://navigatorcraft.net/accueil') {
 
 	var zDiv = document.createElement('div');
 	zDiv.setAttribute('id', 'timer');
-	
-	function closeWindow()
-	{
-	   //netscape.security.PrivilegeManager.enablePrivilege("UniversalBrowserWrite");
-	   //window.open('','_self');
-	   window.close();
+
+	function closeWindow() {
+		// netscape.security.PrivilegeManager.enablePrivilege("UniversalBrowserWrite");
+		// window.open('','_self');
+		window.close();
 	}
 
 	if (activated) {
@@ -669,34 +735,39 @@ if (window.location.href == 'http://navigatorcraft.net/accueil') {
 
 				if (etat.indexOf('<input') != -1) {
 					if (GM_getValue('working' + idBat) == 0) {
-					
+
 						GM_setValue('working' + idBat, 1);
 						// send it
 						form.submit();
 
 					} else {
-						//Just wait
-						//alert(0);
-						//GM_setValue('working' + idBat, 0);
-						
+						// Just wait
+						// alert(0);
+						// GM_setValue('working' + idBat, 0);
+
 						// return to main script
 						// window.location.href =
 						// 'http://navigatorcraft.net/accueil';
-						
+
 						closeWindow();
 					}
 
 				}
 			}
 		}
-		//alert('troll'+(document.getElementById('divBoutonExplo')!=null && document.getElementById('divBoutonExplo').innerHTML.length ==165 &&( GM_getValue('working' + idBat) != 0)));
-		//alert(0);
-		if(document.getElementById('divBoutonExplo')!=null && document.getElementById('divBoutonExplo').innerHTML.length ==165 && GM_getValue('working' + idBat) != 0)
-		{
-		  closeWindow();
+		// alert('troll'+(document.getElementById('divBoutonExplo')!=null &&
+		// document.getElementById('divBoutonExplo').innerHTML.length ==165 &&(
+		// GM_getValue('working' + idBat) != 0)));
+		// alert(0);
+		if (document.getElementById('divBoutonExplo') != null
+				&& document.getElementById('divBoutonExplo').innerHTML.length == 165
+				&& GM_getValue('working' + idBat) != 0) {
+			closeWindow();
 		}
-		//alert( document.getElementById('divBoutonExplo')!=null && document.getElementById('divBoutonExplo').innerHTML.length ==165 && GM_getValue('working' + idBat) != 0);
-		//alert( document.getElementById('divBoutonExplo').innerHTML.length);
+		// alert( document.getElementById('divBoutonExplo')!=null &&
+		// document.getElementById('divBoutonExplo').innerHTML.length ==165 &&
+		// GM_getValue('working' + idBat) != 0);
+		// alert( document.getElementById('divBoutonExplo').innerHTML.length);
 
 		zDiv.innerHTML = 'Plugin not working...';
 		document.body.appendChild(zDiv);
@@ -768,21 +839,55 @@ if (window.location.href == 'http://navigatorcraft.net/accueil') {
 // ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 function upgradeBat(batId) {
-	if (parseInt(batId) == 13) {
-		setCookie('HabInConstruct', 1, null);
-	}
+//	if (parseInt(batId) == 13) {
+//		setCookie('HabInConstruct', 1, null);
+//	}
 	// console.debug('Upgrade !');
-	$.ajax({
-		url : "http://navigatorcraft.net/batiment/upgrade/" + batId,
-		async : false,
-		type : "GET",
-		dataType : "html",
-		success : function(data) {
-			showMessage(data);
-			// console.debug('Upgrade done !' + data);
-		}
-	});
+	
+	var batLevelC = 0;
+	if (document.getElementById("batiment_"+batId)) {
+		batLevelC = parseInt(document.getElementById("batiment_"+batId)
+				.getElementsByClassName('overlay_niveau')[0]
+				.getElementsByTagName('p')[0].innerHTML);
+	}
+	
+	if(batLevelC>0)
+	{
+		$.ajax({
+			url : "http://navigatorcraft.net/batiment/upgrade/" + batId,
+			async : false,
+			type : "GET",
+			dataType : "html",
+			success : function(data) {
+				showMessage(data);
+				// console.debug('Upgrade done !' + data);
+			}
+		});
+	}
+	else
+	{
+		var x = (20+100*batId)%620;
+		var y = (20+(batId%3)*100);
+		acheter(batId,x , y);
+	}
+	
+	
 	// console.debug('Out upgrade !');
+}
+
+function acheter(id_batiment, pos_x, pos_y) {
+	if (id_batiment >= 0) {
+		$.ajax({
+			url : "batiment/achat/" + id_batiment + "/" + pos_x + "/" + pos_y,
+			async : false,
+			type : "GET",
+			dataType : "html",
+			success : function(data) {
+//				confirm(data);
+				location.reload();
+			}
+		});
+	}
 }
 
 function showMessage(data) {
@@ -792,6 +897,7 @@ function showMessage(data) {
 }
 
 function showInfos() {
+
 	var ztable = document.createElement('table');
 
 	var zTr = document.createElement('tr');
@@ -886,43 +992,50 @@ function showInfos() {
 
 	ztable.appendChild(zTr);
 
-	batiments.each(function(key, value) {
-		zTr = document.createElement('tr');
+	batiments
+			.each(function(key, value) {
+				zTr = document.createElement('tr');
 
-		zTd = document.createElement('td');
-		zTd.innerHTML = key;
-		zTr.appendChild(zTd);
+				zTd = document.createElement('td');
+				zTd.innerHTML = key;
+				zTr.appendChild(zTd);
 
-		zTd = document.createElement('td');
-		zTd.innerHTML = parseInt(document.getElementById("batiment_" + value)
-				.getElementsByClassName('overlay_niveau')[0]
-				.getElementsByTagName('p')[0].innerHTML);
-		zTr.appendChild(zTd);
+				zTd = document.createElement('td');
+				zTd.innerHTML = 0;
+				if (document.getElementById("batiment_" + value))
+					zTd.innerHTML = parseInt(document.getElementById(
+							"batiment_" + value).getElementsByClassName(
+							'overlay_niveau')[0].getElementsByTagName('p')[0].innerHTML);
+				zTr.appendChild(zTd);
 
-		zTd = document.createElement('td');
-		zTd.innerHTML = (currentWorkflow.get(key) != null ? currentWorkflow
-				.get(key) : 0);
-		zTr.appendChild(zTd);
+				zTd = document.createElement('td');
+				zTd.innerHTML = (currentWorkflow.get(key) != null ? currentWorkflow
+						.get(key)
+						: 0);
+				zTr.appendChild(zTd);
 
-		ztable.appendChild(zTr);
-	});
+				ztable.appendChild(zTr);
+			});
 
 	document.body.appendChild(ztable);
 }
 
 function process(id, txtDureeSupp, hidValeur, hidDureeTotale) {
 
+//	alert(id);
+//	return;
+	
 	setCookie("id", id, null);
 	setCookie("txtDureeSupp", txtDureeSupp, null);
 	setCookie("hidValeur", hidValeur, null);
 	setCookie("hidDureeTotale", hidDureeTotale, null);
-	//alert(id);
-	GM_setValue('working'+id,0);
+	// alert(id);
+	GM_setValue('working' + id, 0);
 
-	//var timer = setTimeout(function() {// window.location.href =
-		// 'http://navigatorcraft.net/batiment/'+id;
-		window.open('http://navigatorcraft.net/batiment/' + id);
-	//}, 10000);
+	// var timer = setTimeout(function() {// window.location.href =
+	// 'http://navigatorcraft.net/batiment/'+id;
+	window.open('http://navigatorcraft.net/batiment/' + id);
+	// }, 10000);
 
 	setInterval(function() {
 		if (!activated)
@@ -944,7 +1057,6 @@ function saveCurrentWorkflow() {
 	setCookie("currentWorkflowValues", JSON.stringify(values), 365);
 }
 
-
 function getRessources() {
 	var dataTable = document.getElementById("ressources");
 	var cells = dataTable.getElementsByTagName("tr");
@@ -952,47 +1064,43 @@ function getRessources() {
 	for ( var i = 0; i < cells.length; i += 1) {
 
 		var cell1 = cells[i].getElementsByTagName('td')[0];
-		
+
 		var div12In = cell1.getElementsByTagName('div')[1];
-		
+
 		var r1name = div12In.innerHTML.split('<br>')[0];
-		
-//		var r1name = cells[i].getElementsByTagName('img')[0]
-//				.getAttribute('title');
+
+		// var r1name = cells[i].getElementsByTagName('img')[0]
+		// .getAttribute('title');
 		var r1qnt = cell1.getElementsByTagName('p')[0].innerHTML;
-		//alert(r1name+' = '+r1qnt);
+		// alert(r1name+' = '+r1qnt);
 		ressources.put(r1name, r1qnt);
 
 		if (cells[i].getElementsByTagName('td').length > 1) {
-			
+
 			var cell2 = cells[i].getElementsByTagName('td')[1];
-			
+
 			var div22In = cell2.getElementsByTagName('div')[1];
-		
+
 			var r2name = div22In.innerHTML.split('<br>')[0];
 			var r2qnt = cell2.getElementsByTagName('p')[0].innerHTML;
 			ressources.put(r2name, r2qnt);
-			//alert(r2name+' = '+r2qnt);
+			// alert(r2name+' = '+r2qnt);
 		}
 	}
 }
-/*function getRessources() {
-	var dataTable = document.getElementById("ressources");
-	var cells = dataTable.querySelectorAll("tr");
-	for ( var i = 0; i < cells.length; i += 1) {
-		var r1name = cells[i].getElementsByTagName('img')[0]
-				.getAttribute('title');
-		var r1qnt = cells[i].getElementsByTagName('p')[0].innerHTML;
-		ressources.put(r1name, r1qnt);
-
-		if (cells[i].getElementsByTagName('img').length > 1) {
-			var r2name = cells[i].getElementsByTagName('img')[1]
-					.getAttribute('title');
-			var r2qnt = cells[i].getElementsByTagName('p')[1].innerHTML;
-			ressources.put(r2name, r2qnt);
-		}
-	}
-}*/
+/*
+ * function getRessources() { var dataTable =
+ * document.getElementById("ressources"); var cells =
+ * dataTable.querySelectorAll("tr"); for ( var i = 0; i < cells.length; i += 1) {
+ * var r1name = cells[i].getElementsByTagName('img')[0] .getAttribute('title');
+ * var r1qnt = cells[i].getElementsByTagName('p')[0].innerHTML;
+ * ressources.put(r1name, r1qnt);
+ * 
+ * if (cells[i].getElementsByTagName('img').length > 1) { var r2name =
+ * cells[i].getElementsByTagName('img')[1] .getAttribute('title'); var r2qnt =
+ * cells[i].getElementsByTagName('p')[1].innerHTML; ressources.put(r2name,
+ * r2qnt); } } }
+ */
 
 function addWorkflowManager() {
 
@@ -1043,7 +1151,7 @@ function addWorkflowManager() {
 
 	document.getElementById("ressourceList").addEventListener("change",
 			ressourceSelector, false);
-
+			
 	document.getElementById("workflowSetterButton").addEventListener("click",
 			setWorkflow, false);
 
@@ -1094,9 +1202,9 @@ function ressourceSelector(zEvent) {
 function addButton() {
 	var zNode = document.createElement('div');
 	if (activated) {
-		zNode.innerHTML = '<button id="myButton" type="button">Desactivate</button>';
+		zNode.innerHTML = '<button id="myButton" type="button">Desactivate</button><button id="coefMaxButton" type="button">Set coefMax (1-23) :'+coefMax+'h</button>';
 	} else {
-		zNode.innerHTML = '<button id="myButton" type="button">Activate</button>';
+		zNode.innerHTML = '<button id="myButton" type="button">Activate</button><button id="coefMaxButton" type="button">Set coefMax (1-23) :'+coefMax+'h</button>';
 	}
 
 	zNode.setAttribute('id', 'myContainer');
@@ -1105,6 +1213,23 @@ function addButton() {
 	// --- Activate the newly added button.
 	document.getElementById("myButton").addEventListener("click",
 			ButtonClickAction, false);
+			
+	
+	document.getElementById("coefMaxButton").addEventListener("click",
+			function(){
+			 var cMax=prompt("Coef max ?",coefMax);
+
+                if (cMax!=null)
+                  {
+                    coefMax = parseInt(cMax);
+                    coefMax = coefMax > 23 ? 23 : coefMax;
+                    coefMax = coefMax < 1 ? 1 : coefMax;
+                    setCookie("coefMax",coefMax);
+                  }
+
+			
+			
+			}, false);
 
 	function ButtonClickAction(zEvent) {
 		document.getElementById("myButton").disabled = true;
@@ -1118,8 +1243,8 @@ function addButton() {
 			activated = true;
 			GM_setValue('working2', 0);
 			GM_setValue('working7', 0);
-			window.open('http://navigatorcraft.net/batiment/2');
-			window.open('http://navigatorcraft.net/batiment/7');
+			//window.open('http://navigatorcraft.net/batiment/2');
+			//window.open('http://navigatorcraft.net/batiment/7');
 		}
 		setActivated();
 		document.getElementById("myContainer").appendChild(zNode);
@@ -1149,6 +1274,8 @@ function getCookie(name) {
 		return JSON.parse(value);
 	return null;
 }
+
+
 
 // alert('test'+GM_getValue("foo"));
 // GM_setValue("foo", JSON.stringify(GM_getValue("foo")+'r'));
